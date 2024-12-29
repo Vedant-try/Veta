@@ -9,6 +9,9 @@ import xlsxwriter
 st.title("Beta Calculator")
 st.sidebar.header("Input Fields")
 
+# Note for tickers
+st.sidebar.markdown("**Note:** Take tickers from Yahoo Finance (e.g., RELIANCE.NS, ^NSEI).")
+
 # Input fields for stock symbols
 num_companies = st.sidebar.number_input("Number of companies:", min_value=1, max_value=10, value=2)
 stock_symbols = []
@@ -20,18 +23,25 @@ for i in range(num_companies):
 # Input field for index symbol
 index_symbol = st.sidebar.text_input("Enter the Index Symbol (e.g., ^NSEI):", "^NSEI")
 
-# Date input for selecting the start date and number of days to go back
-selected_date = st.sidebar.date_input("Select a particular date:", datetime.now().date())
-num_days = st.sidebar.number_input("Enter the number of days to go back:", min_value=1, max_value=1000, value=30)
+# Date inputs for selecting start and end dates
+start_date = st.sidebar.date_input(
+    "Select Start Date (Max: 5 years ago):",
+    datetime.now().date() - timedelta(days=30),
+    min_value=datetime.now().date() - timedelta(days=5 * 365),
+    max_value=datetime.now().date()
+)
+end_date = st.sidebar.date_input(
+    "Select End Date:",
+    datetime.now().date(),
+    min_value=start_date,
+    max_value=datetime.now().date()
+)
 
 # Initialize session state to store data
 if "stock_data_dict" not in st.session_state:
     st.session_state.stock_data_dict = {}
 if "beta_summary" not in st.session_state:
     st.session_state.beta_summary = []
-
-# Calculate start date based on selected date
-start_date = pd.to_datetime(selected_date) - timedelta(days=num_days)
 
 # Fetch Data Button
 if st.sidebar.button("Fetch Data"):
@@ -40,8 +50,8 @@ if st.sidebar.button("Fetch Data"):
         beta_summary = []
 
         for stock_symbol in stock_symbols:
-            stock_data = yf.download(stock_symbol, start=start_date, end=selected_date)
-            index_data = yf.download(index_symbol, start=start_date, end=selected_date)
+            stock_data = yf.download(stock_symbol, start=start_date, end=end_date)
+            index_data = yf.download(index_symbol, start=start_date, end=end_date)
 
             if not stock_data.empty and not index_data.empty:
                 stock_data['Daily Change (%)'] = stock_data['Close'].pct_change() * 100
