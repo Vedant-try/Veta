@@ -3,3 +3,8 @@ yfinance
 streamlit
 xlsxwriter
 numpy
+pandas
+yfinance
+matplotlib
+streamlit
+openpyxl
