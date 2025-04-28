@@ -15,12 +15,43 @@ st.sidebar.header("Input Fields")
 st.sidebar.markdown("**Note:** Take tickers from Yahoo Finance (e.g., RELIANCE.NS, ^NSEI).")
 
 # Input fields for stock symbols
-num_companies = st.sidebar.number_input("Number of companies:", min_value=1, max_value=10, value=2)
+# Upload CSV file or manual entry
+uploaded_file = st.sidebar.file_uploader("Upload a CSV file with stock tickers", type=["csv"])
+
 stock_symbols = []
-for i in range(num_companies):
-    symbol = st.sidebar.text_input(f"Enter Stock Symbol {i + 1} (e.g., RELIANCE.NS):", "")
-    if symbol:
-        stock_symbols.append(symbol)
+
+if uploaded_file is not None:
+    tickers_df = pd.read_csv(uploaded_file)
+    if 'Ticker' in tickers_df.columns:
+        stock_symbols = tickers_df['Ticker'].dropna().unique().tolist()
+        st.sidebar.success(f"Loaded {len(stock_symbols)} tickers from CSV.")
+    else:
+        st.sidebar.error("CSV must have a column named 'Ticker'.")
+else:
+    st.sidebar.warning("No CSV uploaded. Enter manually below.")
+    num_companies = st.sidebar.number_input("Number of companies:", min_value=1, max_value=250, value=2)
+    for i in range(num_companies):
+        symbol = st.sidebar.text_input(f"Enter Stock Symbol {i + 1} (e.g., RELIANCE.NS):", "")
+        if symbol:
+            stock_symbols.append(symbol)
+
+# Small check
+if not stock_symbols:
+    st.sidebar.warning("Please upload a CSV or manually enter at least one stock symbol.")
+
+# Download Sample CSV
+def get_sample_csv():
+    sample = pd.DataFrame({
+        "Ticker": ["RELIANCE.NS", "TCS.NS", "INFY.NS"]
+    })
+    return sample.to_csv(index=False)
+
+st.sidebar.download_button(
+    label="📥 Download Sample CSV",
+    data=get_sample_csv(),
+    file_name="Sample_Tickers.csv",
+    mime="text/csv",
+)
 
 # Input field for index symbol
 index_symbol = st.sidebar.text_input("Enter the Index Symbol (e.g., ^NSEI):", "^NSEI")
