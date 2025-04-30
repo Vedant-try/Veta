@@ -4,108 +4,120 @@ import yfinance as yf
 from datetime import datetime
 import io
 
-# ------------------ Streamlit Page Setup ------------------
-st.set_page_config("📊 Indian Stock CAGR Calculator", layout="centered")
-
-st.title("📈 Indian Stock CAGR Calculator")
-st.write("This tool calculates the CAGR of Indian listed stocks (NSE) using Yahoo Finance.")
+# -------------------- Setup --------------------
+st.set_page_config("📈 Global Stock CAGR Calculator", layout="centered")
+st.title("📈 Global Stock CAGR Calculator")
 
 st.latex(r"""
 \text{CAGR} = \left( \frac{\text{Ending Price}}{\text{Beginning Price}} \right)^{\frac{1}{\text{Years}}} - 1
 """)
 
-# ------------------ Ticker Input Section ------------------
-st.subheader("1. Input Stock Tickers")
+# -------------------- Ticker Inputs --------------------
+st.subheader("1. Add Tickers Manually or Upload a CSV")
 
-if "ticker_count" not in st.session_state:
-    st.session_state.ticker_count = 1
+# --- Sample CSV Download ---
+with st.expander("📄 Sample CSV Format"):
+    st.markdown("Upload a CSV file with a column named `Ticker` (no header row also works).")
+    sample_csv = pd.DataFrame({"Ticker": ["AAPL", "MSFT", "GOOGL"]})
+    csv_bytes = sample_csv.to_csv(index=False).encode()
+    st.download_button("📥 Download Sample CSV", data=csv_bytes, file_name="sample_tickers.csv", mime="text/csv")
 
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("➕ Add Ticker"):
-        if st.session_state.ticker_count < 1000:
-            st.session_state.ticker_count += 1
-with col2:
-    if st.button("➖ Remove Ticker"):
-        if st.session_state.ticker_count > 1:
-            st.session_state.ticker_count -= 1
+# --- Upload CSV or Use Manual Input ---
+use_csv = st.radio("Select Input Method", ["Manual Entry", "Upload CSV"])
 
 tickers = []
-for i in range(st.session_state.ticker_count):
-    ticker = st.text_input(f"Ticker {i + 1}", value="", key=f"ticker_{i}")
-    if ticker.strip():
-        tickers.append(ticker.strip().upper() + ".NS")  # Adding ".NS" for NSE tickers
 
-# ------------------ Date Inputs ------------------
+if use_csv == "Manual Entry":
+    if "ticker_count" not in st.session_state:
+        st.session_state.ticker_count = 1
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("➕ Add Ticker"):
+            if st.session_state.ticker_count < 1000:
+                st.session_state.ticker_count += 1
+    with col2:
+        if st.button("➖ Remove Ticker"):
+            if st.session_state.ticker_count > 1:
+                st.session_state.ticker_count -= 1
+
+    for i in range(st.session_state.ticker_count):
+        ticker = st.text_input(f"Ticker {i + 1}", key=f"ticker_{i}")
+        if ticker.strip():
+            tickers.append(ticker.strip().upper())
+
+else:
+    uploaded_file = st.file_uploader("Upload your CSV", type=["csv"])
+    if uploaded_file:
+        try:
+            df_uploaded = pd.read_csv(uploaded_file, header=None)
+            tickers = df_uploaded.iloc[:, 0].astype(str).str.upper().tolist()
+            st.success(f"✅ Loaded {len(tickers)} tickers from CSV")
+        except Exception as e:
+            st.error("❌ Error reading CSV. Please ensure it has one column with tickers.")
+
+# -------------------- Date Inputs --------------------
 st.subheader("2. Select Date Range")
 col1, col2 = st.columns(2)
 start_date = col1.date_input("From Date", value=datetime(2015, 1, 1))
 end_date = col2.date_input("To Date", value=datetime.today())
 
-# ------------------ CAGR Calculation Function ------------------
+# -------------------- CAGR Function --------------------
 def calculate_cagr(start_price, end_price, years):
     if start_price <= 0 or years <= 0:
         return None
     return ((end_price / start_price) ** (1 / years)) - 1
 
-# ------------------ Generate Button ------------------
+# -------------------- Results Section --------------------
 st.subheader("3. Generate Results")
 if st.button("🚀 Generate CAGR Results"):
-
     if not tickers:
-        st.warning("Please enter at least one stock ticker.")
+        st.warning("⚠️ Please enter or upload at least one valid ticker.")
     else:
-        st.info("Fetching data... please wait ⏳")
-        result_data = []
+        st.info("⏳ Fetching data from Yahoo Finance...")
+        results = []
         errors = []
 
         for ticker in tickers:
             try:
                 data = yf.download(ticker, start=start_date, end=end_date)
                 if data.empty or 'Adj Close' not in data:
-                    errors.append(ticker.replace(".NS", ""))
+                    errors.append(ticker)
                     continue
-
                 start_price = data['Adj Close'].iloc[0]
                 end_price = data['Adj Close'].iloc[-1]
                 years = (end_date - start_date).days / 365.25
-
                 cagr = calculate_cagr(start_price, end_price, years)
-                result_data.append({
-                    "Ticker": ticker.replace(".NS", ""),
-                    "Start Price (₹)": round(start_price, 2),
-                    "End Price (₹)": round(end_price, 2),
+                results.append({
+                    "Ticker": ticker,
+                    "Start Price": round(start_price, 2),
+                    "End Price": round(end_price, 2),
                     "Years": round(years, 2),
                     "CAGR (%)": round(cagr * 100, 2) if cagr is not None else "N/A"
                 })
-
             except Exception as e:
-                errors.append(ticker.replace(".NS", ""))
+                errors.append(ticker)
 
-        # ------------------ Display Results ------------------
-        if result_data:
-            result_df = pd.DataFrame(result_data)
-            st.success("CAGR Calculation Completed ✅")
+        if results:
+            result_df = pd.DataFrame(results)
+            st.success("✅ CAGR Calculation Completed")
             st.dataframe(result_df)
 
-            # ------------------ Excel Download ------------------
+            # Excel export
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 result_df.to_excel(writer, index=False, sheet_name='CAGR Results')
-                workbook = writer.book
                 worksheet = writer.sheets['CAGR Results']
-                worksheet.set_column('A:E', 18)
-
-                # Add formula at top
+                worksheet.set_column('A:E', 20)
                 worksheet.write('G1', 'Formula:')
                 worksheet.write('G2', 'CAGR = (End / Start)^(1/Years) - 1')
 
             st.download_button(
-                label="📥 Download Excel Report",
+                label="📥 Download Excel",
                 data=output.getvalue(),
-                file_name="CAGR_Results_India.xlsx",
+                file_name="CAGR_Results.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
         if errors:
-            st.error("No data found for these tickers: " + ", ".join(errors))
+            st.error(f"❌ No data found for: {', '.join(errors)}")
