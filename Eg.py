@@ -70,13 +70,14 @@ if tickers:
     with st.spinner("Fetching data from Yahoo Finance..."):
         for ticker in tickers:
             try:
-                data = yf.download(ticker, start=start_date, end=end_date)
-                if data.empty:
+                data = yf.Ticker(ticker).history(start=start_date, end=end_date)
+                if data.empty or 'Close' not in data.columns:
                     failed_tickers.append(ticker)
                     continue
-                
-                start_price = data['Adj Close'].iloc[0]
-                end_price = data['Adj Close'].iloc[-1]
+
+                data = data.dropna(subset=['Close'])
+                start_price = data['Close'].iloc[0]
+                end_price = data['Close'].iloc[-1]
                 num_years = (end_date - start_date).days / 365.25
                 cagr = calculate_cagr(start_price, end_price, num_years)
 
@@ -111,8 +112,7 @@ if tickers:
 # ------------------ Footer ------------------
 st.markdown("""
 ---
-💡 **CAGR Formula**:
-\[\text{CAGR} = \left(\frac{\text{Final Price}}{\text{Initial Price}}\right)^{\frac{1}{\text{Years}}} - 1\]
+💡 **CAGR Formula:**
 
-Built with ❤️ using [Yahoo Finance](https://finance.yahoo.com/).
+\[ \text{CAGR} = \left( \frac{\text{Final Price}}{\text{Initial Price}} \right)^{\frac{1}{\text{Years}}} - 1 \]
 """)
