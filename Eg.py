@@ -80,14 +80,29 @@ if st.button("🚀 Generate CAGR Results"):
 
         for ticker in tickers:
             try:
-                data = yf.download(ticker, start=start_date, end=end_date)
+                # Add 7-day buffer before/after to handle missing trading days
+                data = yf.download(ticker, start=start_date - pd.Timedelta(days=7), end=end_date + pd.Timedelta(days=7))
+
                 if data.empty or 'Adj Close' not in data:
                     errors.append(ticker)
                     continue
+
+                # Drop NaNs and find first and last valid prices within range
+                data = data[['Adj Close']].dropna()
+                data = data[(data.index >= pd.to_datetime(start_date)) & (data.index <= pd.to_datetime(end_date))]
+
+                if data.empty:
+                    errors.append(ticker)
+                    continue
+
                 start_price = data['Adj Close'].iloc[0]
                 end_price = data['Adj Close'].iloc[-1]
-                years = (end_date - start_date).days / 365.25
+                actual_start = data.index[0]
+                actual_end = data.index[-1]
+                years = (actual_end - actual_start).days / 365.25
+
                 cagr = calculate_cagr(start_price, end_price, years)
+
                 results.append({
                     "Ticker": ticker,
                     "Start Price": round(start_price, 2),
@@ -95,6 +110,7 @@ if st.button("🚀 Generate CAGR Results"):
                     "Years": round(years, 2),
                     "CAGR (%)": round(cagr * 100, 2) if cagr is not None else "N/A"
                 })
+
             except Exception as e:
                 errors.append(ticker)
 
@@ -102,6 +118,25 @@ if st.button("🚀 Generate CAGR Results"):
             result_df = pd.DataFrame(results)
             st.success("✅ CAGR Calculation Completed")
             st.dataframe(result_df)
+
+            # Excel export
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                result_df.to_excel(writer, index=False, sheet_name='CAGR Results')
+                worksheet = writer.sheets['CAGR Results']
+                worksheet.set_column('A:E', 20)
+                worksheet.write('G1', 'Formula:')
+                worksheet.write('G2', 'CAGR = (End / Start)^(1/Years) - 1')
+
+            st.download_button(
+                label="📥 Download Excel",
+                data=output.getvalue(),
+                file_name="CAGR_Results.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+        if errors:
+            st.error(f"❌ No data found or no trading days for: {', '.join(errors)}")
 
             # Excel export
             output = io.BytesIO()
