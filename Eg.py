@@ -1,125 +1,121 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-from datetime import datetime
 import io
+import datetime
 
-# -------------------- Setup --------------------
-st.set_page_config("📈 Global Stock CAGR Calculator", layout="centered")
-st.title("📈 Global Stock CAGR Calculator")
+st.set_page_config(page_title="CAGR Calculator", layout="wide")
+st.title("📈 CAGR Calculator from Yahoo Finance Data")
 
-st.latex(r"""
-\text{CAGR} = \left( \frac{\text{Ending Price}}{\text{Beginning Price}} \right)^{\frac{1}{\text{Years}}} - 1
-""")
+# --- CAGR Formula Display ---
+with st.expander("📌 What is CAGR?"):
+    st.markdown(r"""
+    **Compound Annual Growth Rate (CAGR)** is calculated using the formula:
 
-# -------------------- Ticker Inputs --------------------
-st.subheader("1. Add Tickers Manually or Upload a CSV")
+    \[
+    \text{CAGR} = \left( \frac{\text{End Price}}{\text{Start Price}} \right)^{\frac{1}{\text{Years}}} - 1
+    \]
 
-# --- Sample CSV Download ---
-with st.expander("📄 Sample CSV Format"):
-    st.markdown("Upload a CSV file with a column named `Ticker` (no header row also works).")
-    sample_csv = pd.DataFrame({"Ticker": ["AAPL", "MSFT", "GOOGL"]})
-    csv_bytes = sample_csv.to_csv(index=False).encode()
-    st.download_button("📥 Download Sample CSV", data=csv_bytes, file_name="sample_tickers.csv", mime="text/csv")
+    It measures the smoothed annual growth rate of an investment over a period of time.
+    """)
 
-# --- Upload CSV or Use Manual Input ---
-use_csv = st.radio("Select Input Method", ["Manual Entry", "Upload CSV"])
+# --- Date Inputs ---
+col1, col2 = st.columns(2)
+with col1:
+    start_date = st.date_input("Start Date", value=datetime.date(2018, 1, 1))
+with col2:
+    end_date = st.date_input("End Date", value=datetime.date.today())
+
+# --- Manual Ticker Entry ---
+st.subheader("📝 Enter Tickers Manually or Upload CSV")
+input_method = st.radio("Choose input method", ["Manual Entry", "Upload CSV"])
 
 tickers = []
 
-if use_csv == "Manual Entry":
-    if "ticker_count" not in st.session_state:
+if input_method == "Manual Entry":
+    if 'ticker_count' not in st.session_state:
         st.session_state.ticker_count = 1
 
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([3, 1])
     with col1:
-        if st.button("➕ Add Ticker"):
-            if st.session_state.ticker_count < 1000:
-                st.session_state.ticker_count += 1
-    with col2:
-        if st.button("➖ Remove Ticker"):
-            if st.session_state.ticker_count > 1:
-                st.session_state.ticker_count -= 1
+        for i in range(st.session_state.ticker_count):
+            tickers.append(st.text_input(f"Ticker {i+1}", key=f"ticker_{i}"))
 
-    for i in range(st.session_state.ticker_count):
-        ticker = st.text_input(f"Ticker {i + 1}", key=f"ticker_{i}")
-        if ticker.strip():
-            tickers.append(ticker.strip().upper())
+    with col2:
+        if st.button("➕ Add Ticker") and st.session_state.ticker_count < 1000:
+            st.session_state.ticker_count += 1
+        if st.button("➖ Remove Ticker") and st.session_state.ticker_count > 1:
+            st.session_state.ticker_count -= 1
 
 else:
-    uploaded_file = st.file_uploader("Upload your CSV", type=["csv"])
+    sample_df = pd.DataFrame({"Ticker": ["AAPL", "MSFT", "HDFCBANK.NS"]})
+    csv_buffer = io.BytesIO()
+    sample_df.to_csv(csv_buffer, index=False)
+    st.download_button("📥 Download Sample CSV", data=csv_buffer.getvalue(), file_name="sample_tickers.csv")
+
+    uploaded_file = st.file_uploader("Upload a CSV with a column named 'Ticker'", type=["csv"])
     if uploaded_file:
         try:
-            df_uploaded = pd.read_csv(uploaded_file, header=None)
-            tickers = df_uploaded.iloc[:, 0].astype(str).str.upper().tolist()
-            st.success(f"✅ Loaded {len(tickers)} tickers from CSV")
+            df = pd.read_csv(uploaded_file)
+            if "Ticker" in df.columns:
+                tickers = df["Ticker"].dropna().astype(str).tolist()
+            else:
+                st.error("❌ CSV must contain a 'Ticker' column.")
         except Exception as e:
-            st.error("❌ Error reading CSV. Please ensure it has one column with tickers.")
+            st.error(f"❌ Error reading CSV: {e}")
 
-# -------------------- Date Inputs --------------------
-st.subheader("2. Select Date Range")
-col1, col2 = st.columns(2)
-start_date = col1.date_input("From Date", value=datetime(2015, 1, 1))
-end_date = col2.date_input("To Date", value=datetime.today())
-
-# -------------------- CAGR Function --------------------
-def calculate_cagr(start_price, end_price, years):
-    if start_price <= 0 or years <= 0:
+# --- Function to fetch and compute CAGR ---
+def get_clean_cagr_data(ticker, start_date, end_date):
+    try:
+        data = yf.download(ticker, start=start_date - pd.Timedelta(days=7), end=end_date + pd.Timedelta(days=7))
+        if data.empty or 'Adj Close' not in data:
+            return None
+        data = data[['Adj Close']].dropna()
+        data = data[(data.index >= pd.to_datetime(start_date)) & (data.index <= pd.to_datetime(end_date))]
+        if data.empty or len(data) < 2:
+            return None
+        actual_start = data.index[0]
+        actual_end = data.index[-1]
+        start_price = data['Adj Close'].iloc[0]
+        end_price = data['Adj Close'].iloc[-1]
+        years = (actual_end - actual_start).days / 365.25
+        if years <= 0:
+            return None
+        cagr = (end_price / start_price) ** (1 / years) - 1
+        return {
+            "Ticker": ticker,
+            "Start Price": round(start_price, 2),
+            "End Price": round(end_price, 2),
+            "Years": round(years, 2),
+            "CAGR (%)": round(cagr * 100, 2)
+        }
+    except:
         return None
-    return ((end_price / start_price) ** (1 / years)) - 1
 
-# -------------------- Results Section --------------------
-st.subheader("3. Generate Results")
-if st.button("🚀 Generate CAGR Results"):
+# --- Generate Button ---
+if st.button("🚀 Generate Results"):
     if not tickers:
-        st.warning("⚠️ Please enter or upload at least one valid ticker.")
+        st.warning("⚠️ Please provide at least one valid ticker.")
     else:
-        st.info("⏳ Fetching data from Yahoo Finance...")
         results = []
         errors = []
 
-        for ticker in tickers:
-            try:
-                # Add 7-day buffer before/after to handle missing trading days
-                data = yf.download(ticker, start=start_date - pd.Timedelta(days=7), end=end_date + pd.Timedelta(days=7))
-
-                if data.empty or 'Adj Close' not in data:
-                    errors.append(ticker)
+        with st.spinner("Fetching data..."):
+            for ticker in tickers:
+                if ticker.strip() == "":
                     continue
-
-                # Drop NaNs and find first and last valid prices within range
-                data = data[['Adj Close']].dropna()
-                data = data[(data.index >= pd.to_datetime(start_date)) & (data.index <= pd.to_datetime(end_date))]
-
-                if data.empty:
+                result = get_clean_cagr_data(ticker.strip(), pd.to_datetime(start_date), pd.to_datetime(end_date))
+                if result:
+                    results.append(result)
+                else:
                     errors.append(ticker)
-                    continue
-
-                start_price = data['Adj Close'].iloc[0]
-                end_price = data['Adj Close'].iloc[-1]
-                actual_start = data.index[0]
-                actual_end = data.index[-1]
-                years = (actual_end - actual_start).days / 365.25
-
-                cagr = calculate_cagr(start_price, end_price, years)
-
-                results.append({
-                    "Ticker": ticker,
-                    "Start Price": round(start_price, 2),
-                    "End Price": round(end_price, 2),
-                    "Years": round(years, 2),
-                    "CAGR (%)": round(cagr * 100, 2) if cagr is not None else "N/A"
-                })
-
-            except Exception as e:
-                errors.append(ticker)
 
         if results:
             result_df = pd.DataFrame(results)
-            st.success("✅ CAGR Calculation Completed")
+            st.success("✅ Data fetched successfully!")
             st.dataframe(result_df)
 
-            # Excel export
+            # --- Excel Export ---
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 result_df.to_excel(writer, index=False, sheet_name='CAGR Results')
@@ -136,23 +132,4 @@ if st.button("🚀 Generate CAGR Results"):
             )
 
         if errors:
-            st.error(f"❌ No data found or no trading days for: {', '.join(errors)}")
-
-            # Excel export
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                result_df.to_excel(writer, index=False, sheet_name='CAGR Results')
-                worksheet = writer.sheets['CAGR Results']
-                worksheet.set_column('A:E', 20)
-                worksheet.write('G1', 'Formula:')
-                worksheet.write('G2', 'CAGR = (End / Start)^(1/Years) - 1')
-
-            st.download_button(
-                label="📥 Download Excel",
-                data=output.getvalue(),
-                file_name="CAGR_Results.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-        if errors:
-            st.error(f"❌ No data found for: {', '.join(errors)}")
+            st.warning(f"⚠️ No data found for these tickers: {', '.join(errors)}")
