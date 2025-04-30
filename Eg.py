@@ -70,14 +70,16 @@ if tickers:
     with st.spinner("Fetching data from Yahoo Finance..."):
         for ticker in tickers:
             try:
-                data = yf.Ticker(ticker).history(start=start_date, end=end_date)
-                if data.empty or 'Close' not in data.columns:
+                # Using yf.download for reliability
+                data = yf.download(ticker, start=start_date, end=end_date, progress=False)
+                data = data[['Adj Close']].dropna()
+
+                if data.empty:
                     failed_tickers.append(ticker)
                     continue
 
-                data = data.dropna(subset=['Close'])
-                start_price = data['Close'].iloc[0]
-                end_price = data['Close'].iloc[-1]
+                start_price = data['Adj Close'].iloc[0]
+                end_price = data['Adj Close'].iloc[-1]
                 num_years = (end_date - start_date).days / 365.25
                 cagr = calculate_cagr(start_price, end_price, num_years)
 
