@@ -88,10 +88,9 @@ if st.sidebar.button("Fetch Data"):
 
         for stock_symbol in stock_symbols:
             stock_ticker = yf.Ticker(stock_symbol, session=session)
-stock_data = stock_ticker.history(start=start_date, end=end_date)
-
-index_ticker = yf.Ticker(index_symbol, session=session)
-index_data = index_ticker.history(start=start_date, end=end_date)
+            stock_data = stock_ticker.history(start=start_date, end=end_date)
+            index_ticker = yf.Ticker(index_symbol, session=session)
+            index_data = index_ticker.history(start=start_date, end=end_date)
 
 
             if not stock_data.empty and not index_data.empty:
