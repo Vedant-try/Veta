@@ -80,11 +80,11 @@ st.latex(r"\beta = \frac{\text{Cov}(R_{\text{stock}}, R_{\text{index}})}{\text{V
 # Fetch Data Button
 if st.sidebar.button("Fetch Data"):
     try:
-               session = create_custom_session()
-
+        session = create_custom_session()
 
         stock_data_dict = {}
         beta_summary = []
+
 
         for stock_symbol in stock_symbols:
             stock_ticker = yf.Ticker(stock_symbol, session=session)
