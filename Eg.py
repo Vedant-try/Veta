@@ -6,7 +6,15 @@ from io import BytesIO
 import xlsxwriter
 import matplotlib.pyplot as plt
 from matplotlib.dates import DateFormatter, MonthLocator, YearLocator
+import yfinance
+import requests
 
+def patch_yfinance_user_agent():
+    yfinance.base._BASE_HEADERS['User-Agent'] = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    )
 # Initialize Streamlit App
 st.title("Beta Calculator")
 st.sidebar.header("Input Fields")
@@ -67,12 +75,7 @@ st.latex(r"\beta = \frac{\text{Cov}(R_{\text{stock}}, R_{\text{index}})}{\text{V
 # Fetch Data Button
 if st.sidebar.button("Fetch Data"):
     try:
-        from yfinance import shared
-        shared._USER_AGENT_HEADERS["User-Agent"] = (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/122.0.0.0 Safari/537.36"
-        )
+        patch_yfinance_user_agent()
 
         stock_data_dict = {}
         beta_summary = []
