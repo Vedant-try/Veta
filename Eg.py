@@ -9,12 +9,17 @@ from matplotlib.dates import DateFormatter, MonthLocator, YearLocator
 import yfinance
 import requests
 
-def patch_yfinance_user_agent():
-    yfinance.base._BASE_HEADERS['User-Agent'] = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.0.0 Safari/537.36"
-    )
+def create_custom_session():
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        )
+    })
+    return session
+    
 # Initialize Streamlit App
 st.title("Beta Calculator")
 st.sidebar.header("Input Fields")
@@ -75,14 +80,19 @@ st.latex(r"\beta = \frac{\text{Cov}(R_{\text{stock}}, R_{\text{index}})}{\text{V
 # Fetch Data Button
 if st.sidebar.button("Fetch Data"):
     try:
-        patch_yfinance_user_agent()
+               session = create_custom_session()
+
 
         stock_data_dict = {}
         beta_summary = []
 
         for stock_symbol in stock_symbols:
-            stock_data = yf.download(stock_symbol, start=start_date, end=end_date)
-            index_data = yf.download(index_symbol, start=start_date, end=end_date)
+            stock_ticker = yf.Ticker(stock_symbol, session=session)
+stock_data = stock_ticker.history(start=start_date, end=end_date)
+
+index_ticker = yf.Ticker(index_symbol, session=session)
+index_data = index_ticker.history(start=start_date, end=end_date)
+
 
             if not stock_data.empty and not index_data.empty:
                 stock_data['Daily Change (%)'] = stock_data['Close'].pct_change() * 100
