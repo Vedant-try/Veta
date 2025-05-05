@@ -112,7 +112,7 @@ if st.sidebar.button("Fetch Data"):
             index_data = yf.download(index_symbol, start=start_date, end=end_date)
 
     # Delay to avoid hitting Yahoo too fast
-    time.sleep(2)
+            time.sleep(2)
 
             if not stock_data.empty and not index_data.empty:
                 stock_data['Daily Change (%)'] = stock_data['Close'].pct_change() * 100
